@@ -2,7 +2,7 @@
 
 **A flu forecasting dashboard that turns weekly surveillance data into one-to-four-week activity outlooks.**
 
-[Explore the live demo](https://flu-surge-outlook.netlify.app/) · [My contributions](#my-contributions) · [Results](#what-we-found) · [Run locally](#run-locally)
+[Explore the live demo](https://flu-surge-outlook.netlify.app/) · [Results](#what-we-found) · [Run locally](#run-locally)
 
 Flu Surge Outlook helps users explore how influenza activity is changing, compare forecasts from five models, and understand the probability of reaching a higher activity level. It combines a public-facing dashboard with reproducible data preparation, model evaluation, and exploratory analysis.
 
@@ -53,18 +53,6 @@ Models are evaluated at weekly rolling forecast origins, using only observations
 ### Interpreting the results
 
 This is a research prototype for exploring surveillance signals and forecast uncertainty. Results use revised historical data rather than an as-of-publication reconstruction. Threshold calibration includes 2024–25, so that season’s threshold-based evaluation is not fully independent. The unusually low 2020–21 period is imputed for modeling, while threshold calculations retain raw observations. Wastewater correlations are descriptive and do not establish operational advance warning or incremental forecast value.
-
-## My contributions
-
-I focused on making the data, event definitions, and supporting analyses reproducible and interpretable.
-
-- **Data validation and EDA:** checked ILI+ calculations, weekly continuity, missing values, and duplicates; created historical and seasonal visualizations.
-- **Threshold design:** reproduced the early-rise threshold, explored high-activity percentile alternatives, and documented the assumptions behind both definitions.
-- **Season-boundary analysis:** identified that the 2022–23 threshold exceedance was already underway before the week-40 evaluation window, avoiding a misleading new-onset label.
-- **Wastewater preparation:** added geography-specific reporting-coverage checks and an influenza-A ILI+ series for a like-for-like viral-type comparison.
-- **Lead-time exploration:** compared seasonal timing and lag correlations, checked weekly changes, and documented the absence of a consistent lead in the examined data.
-
-[EDA and threshold PR #1](https://github.com/CocoChengtw/flu-forecast/pull/1) · [Wastewater PR #5](https://github.com/CocoChengtw/flu-forecast/pull/5)
 
 The forecasting models, evaluation framework, dashboard, assistant, and presentation were collaborative work by **Coco Cheng, Flora Jeong, Christina, Frank, and Mark**. This fork preserves the original Git history and attribution.
 
