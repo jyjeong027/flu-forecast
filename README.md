@@ -1,195 +1,120 @@
-# Seeing the Surge Coming
+# Flu Surge Outlook
 
-**AI vs. Statistical Forecasts of Flu Season, Deployed as a Live Dashboard**
+**A flu forecasting dashboard that turns weekly surveillance data into one-to-four-week activity outlooks.**
 
-Group final project for Time Series Analysis and Forecasting (UCLA Anderson, Dr. William Yu).
+[Explore the live demo](https://flu-surge-outlook.netlify.app/) · [My contributions](#my-contributions) · [Results](#what-we-found) · [Run locally](#run-locally)
 
-## Goal
+Flu Surge Outlook helps users explore how influenza activity is changing, compare forecasts from five models, and understand the probability of reaching a higher activity level. It combines a public-facing dashboard with reproducible data preparation, model evaluation, and exploratory analysis.
 
-Give a local health department or hospital operations team early warning of the flu season, so they can decide when to add staff and beds, push vaccination messaging, and alert providers.
+This is Flora Jeong’s portfolio fork of a collaborative project, originally titled **Seeing the Surge Coming**. The [original repository](https://github.com/CocoChengtw/flu-forecast) contains the team’s shared work. The linked demo is the team deployment; edits to this fork do not update it.
 
-We forecast weekly U.S. **ILI+** 1–4 weeks ahead and compare classical statistical models with an AI forecasting model. The best results are shown in a web dashboard with an AI assistant that explains the forecast in plain language.
+## Explore the product
 
-### Forecast target: ILI+
+- **Activity outlook:** see the current signal level and the probability of crossing a high-activity threshold within the next four weeks.
+- **Model comparison:** compare seasonal naïve, ETS, ARIMA, Prophet, and Chronos forecasts alongside their uncertainty and historical performance.
+- **Seasonal context:** explore how the current trajectory compares with previous flu seasons.
+- **Geographic context:** inspect state-level activity on the dashboard’s map.
+- **Plain-language explanations:** use the assistant to ask about the displayed data and forecasts.
 
-**ILI+ = weighted ILI% × (% of flu tests positive / 100)**
+The dashboard opens with a historical case study, including an option to reveal what happened next. A separate latest-week view shows the newest included observations, with forecast availability depending on the model. A hosted demo does not imply an automatically refreshed surveillance feed.
 
-- **ILI%** (influenza-like illness): the share of outpatient visits for fever plus cough or sore throat, from CDC's ILINet network. It measures how many people are sick, but it also counts COVID, RSV and colds.
-- **% positive**: the share of clinical-lab flu tests that are positive. It is flu-specific, but it says nothing about how many people are sick.
+## What the forecasts measure
 
-Multiplying them estimates the share of outpatient visits that are actually flu. We switched from test positivity alone because positivity depends on who gets tested and cannot tell a mild season from a severe one. See `notes/analysis_log.md` for the full reasoning.
+The target is national weekly **ILI+**, a proxy for influenza-related outpatient activity:
 
-### Outputs
+**ILI+ = weighted percentage of visits for influenza-like illness × influenza test positivity / 100**
 
-The forecasts are framed around timing decisions, not just point estimates:
+ILI describes the share of outpatient visits involving flu-like symptoms. Test positivity adds information about influenza specifically. Combining them accounts for both symptom-related visit volume and influenza positivity, while retaining limitations from care-seeking and testing patterns. ILI+ is not a direct count of infections or population prevalence.
 
-1. **Threshold probability (priority):** the chance ILI+ goes above a threshold within the next 1–4 weeks. If ILI+ is already above it, we show "Above threshold" instead, since the probability would stay near 100% for weeks.
-2. **Onset week:** the first of two consecutive weeks above the early-rise threshold.
-3. **Peak timing:** the chance the season peaks within the next 4 weeks.
+The project uses 523 consecutive national weekly observations from October 2016 through October 2026, sourced from CDC FluView through the [Delphi Epidata API](https://cmu-delphi.github.io/delphi-epidata/). HHS Region 9 data are also included; reported model comparisons are national.
 
-Two thresholds, both locked from pre-test data before looking at 2025–26 results:
+| Signal | ILI+ threshold | Interpretation |
+| --- | ---: | --- |
+| Early rise | 0.0282 | Departure from low off-season activity |
+| High activity | 0.6939 | A relatively high level of historical in-season activity |
 
-| Threshold | Value | Role |
-|---|---|---|
-| **High activity** (`HIGH_THRESHOLD`) | 0.694 | **Main output:** surge decisions (staffing, beds) |
-| **Early rise** (`EARLY_RISE_THRESHOLD`) | 0.028 | Secondary: activity rising above the summer floor |
+The early-rise threshold uses the off-season mean plus two sample standard deviations. The high-activity threshold uses the 75th percentile of in-season observations from the three seasons before the main 2025–26 evaluation period. These are research definitions, not validated staffing or bed-capacity triggers.
 
-## Data
+When activity is below the threshold, the main event output estimates the probability that at least one of the next four weeks exceeds it. If activity is already above, the product displays that status. Dashboard values expressed per 1,000 visits use ILI+ × 10, so 0.6939 corresponds to approximately 6.94 on that scale.
 
-| File | Source | Notes |
-|---|---|---|
-| `data/processed/ili_plus_weekly.csv` | CDC FluView (ILINet + clinical labs) via the [Delphi Epidata API](https://cmu-delphi.github.io/delphi-epidata/) | **Main dataset.** Weekly, national (`nat`) and HHS Region 9 (`hhs9`), from the 2016–17 season. Built by `src/fetch_ili_plus.py`. |
-| `data/processed/nwss_flu_a_weekly.csv` | CDC NWSS ([dataset](https://catalog.data.gov/dataset/cdc-wastewater-data-for-influenza-a)) | Influenza A wastewater, national weekly summary. Used only for the stretch lead-time analysis. |
-| `data/processed/flu_positivity_us_weekly.csv` | WHO FluNet via Our World in Data | Original target (U.S. test positivity, 2009–). Kept for reference, not used by the models. |
-| `data/raw/` | | Original downloads. Never edit by hand. The raw wastewater file (141 MB) is not in the repo. |
+## What we found
 
-All weeks follow CDC's **MMWR** week numbering: weeks run Sunday to Saturday, and `week_start` is the Sunday.
+Models are evaluated at weekly rolling forecast origins, using only observations through each origin, with horizons of one to four weeks and 500 simulated paths. The main evaluation season is 2025–26, with 2024–25 as an additional check.
 
-To refresh the ILI+ data (no API key needed):
+- **ARIMA was consistent across both seasons:** distributional forecast error (CRPS) was approximately 27% and 42% lower than the seasonal naïve baseline.
+- **Chronos produced competitive point forecasts, but underestimated uncertainty:** its nominal 90% intervals contained observations only about 60–61% of the time.
+- **Prophet’s performance varied by season:** it achieved the lowest CRPS in 2025–26 but performed worse than the baseline in 2024–25.
+- **Wastewater tracked influenza-A ILI+ closely without a consistent lead:** in four complete seasons, the strongest level correlations occurred at the same week or with wastewater one week later. Weekly changes aligned best at zero lag in every season.
 
-```bash
-python src/fetch_ili_plus.py
-```
+[Full model metrics](results/metrics_summary.csv) · [Wastewater analysis](notes/wastewater_lead_exploration.md)
 
-If the API is down, download the same series manually from CDC FluView Interactive.
+![Forecast comparison with observed influenza activity](results/figures/forecast_vs_actual.png)
 
-To rebuild the wastewater files, download the raw CSV from
-`https://data.cdc.gov/api/views/ymmh-divb/rows.csv?accessType=DOWNLOAD`,
-save it as `data/raw/nwss_flu_a.csv`, then run `python src/clean.py`.
+### Interpreting the results
 
-## Methods
+This is a research prototype for exploring surveillance signals and forecast uncertainty. Results use revised historical data rather than an as-of-publication reconstruction. Threshold calibration includes 2024–25, so that season’s threshold-based evaluation is not fully independent. The unusually low 2020–21 period is imputed for modeling, while threshold calculations retain raw observations. Wastewater correlations are descriptive and do not establish operational advance warning or incremental forecast value.
 
-All shared settings (dates, horizons, threshold, number of paths, random seed) live in **`src/config.py`**. Import them from there; never hard-code them.
+## My contributions
 
-| Decision | Choice |
-|---|---|
-| Training data | 2016–17 season onward (the first season with clinical-lab positivity in the Delphi data) |
-| Test period | 2025–26 season, MMWR weeks 40–20. Every week is a forecast origin, and each model sees only data up to that week. |
-| Second test fold | 2024–25, trained only on data before it, to check that model rankings hold beyond one season (`config.TEST_FOLDS`). |
-| Horizons | 1–4 weeks ahead |
-| COVID | 2020–21 (flu nearly absent) is replaced with the same-week mean of other pre-test seasons and flagged `is_imputed`. 2021–22 is kept as observed. |
-| Thresholds | **High activity:** 75th percentile of in-season ILI+ (weeks 40–20) over the 3 most recent pre-test seasons. **Early rise:** off-season (MMWR weeks 21–39) mean + 2 SD over the last 3 non-COVID pre-test seasons, adapted from CDC's ILINet baseline method. |
-| Uncertainty | Every model produces 500 simulated paths per origin. All probabilities are computed from these paths the same way for every model. |
+I focused on making the data, event definitions, and supporting analyses reproducible and interpretable.
 
-**Models**
+- **Data validation and EDA:** checked ILI+ calculations, weekly continuity, missing values, and duplicates; created historical and seasonal visualizations.
+- **Threshold design:** reproduced the early-rise threshold, explored high-activity percentile alternatives, and documented the assumptions behind both definitions.
+- **Season-boundary analysis:** identified that the 2022–23 threshold exceedance was already underway before the week-40 evaluation window, avoiding a misleading new-onset label.
+- **Wastewater preparation:** added geography-specific reporting-coverage checks and an influenza-A ILI+ series for a like-for-like viral-type comparison.
+- **Lead-time exploration:** compared seasonal timing and lag correlations, checked weekly changes, and documented the absence of a consistent lead in the examined data.
 
-- Classical: seasonal naive (baseline), ETS, ARIMA with Fourier terms, Prophet
-- AI: Chronos (a time-series foundation model)
-- Optional: a small ChatGPT/Claude comparison on 3–5 origins
+[EDA and threshold PR #1](https://github.com/CocoChengtw/flu-forecast/pull/1) · [Wastewater PR #5](https://github.com/CocoChengtw/flu-forecast/pull/5)
 
-**Metrics**
+The forecasting models, evaluation framework, dashboard, assistant, and presentation were collaborative work by **Coco Cheng, Flora Jeong, Christina, Frank, and Mark**. This fork preserves the original Git history and attribution.
 
-- Point forecasts (path median): MAE, RMSE
-- Threshold probabilities: Brier score
-- Timing: error in onset week and peak week, in weeks
+## Run locally
 
-**Wastewater (stretch goal):** a lead-time analysis of wastewater vs. influenza-A ILI+ only. The wastewater history is too short to use as a model input. Use `ili_plus_a_weekly.csv` and the `nwss_flu_a_*_filtered.csv` files for the comparison/map; original aggregates remain available for audit. The coverage screen uses each geography's prior-eight-week median site count, with a 50% cutoff. See [wastewater preparation and map guidance](notes/wastewater_stretch.md) for limitations, missing-week handling, and reproduction commands.
+### Dashboard
 
-### Shared forecast output format
-
-Every model saves `results/forecasts/<model>.csv` with these columns:
-
-| Column | Description |
-|---|---|
-| `model` | e.g. `naive`, `ets`, `chronos` |
-| `origin` | forecast week (Sunday start) |
-| `horizon` | 1–4 |
-| `target_week` | week being forecast |
-| `path_id` | simulated path, 0–499 |
-| `value` | forecast ILI+ |
-
-Plug a model into the rolling-origin framework in `src/evaluate.py` and it writes this file for you. Run both folds: `rolling_forecast(model_fn, "<model>")` and `rolling_forecast(model_fn, "<model>", fold="2024-25")`; the second fold is saved in `results/forecasts/fold_2024-25/`. Run `python -m src.diagnostics <model>` to check a model's intervals before trusting its probabilities.
-
-## Repo structure
-
-```
-flu-forecast/
-├── data/
-│   ├── raw/            original downloads, never edit by hand
-│   └── processed/      cleaned weekly series (ILI+, wastewater)
-├── src/
-│   ├── config.py           shared settings for everyone
-│   ├── fetch_ili_plus.py   downloads ILI+ data
-│   ├── clean.py            cleans FluNet and wastewater raw files
-│   ├── evaluate.py         rolling-origin framework and point metrics
-│   └── ...                 models, probabilities, diagnostics
-├── notebooks/          exploration notebooks
-├── results/
-│   ├── forecasts/      one CSV per model, shared format above (fold_2024-25/ for the second fold)
-│   └── figures/
-├── notes/              decision log for the methods and limitations slides
-├── app/                dashboard (React page + Python assistant), see app/README.md
-├── forecasting_project_handbook.md   course concepts, from the lecture decks
-├── requirements.txt
-├── .env.example
-└── README.md
-```
-
-## First-time setup
-
-Use **Python 3.11** (Prophet is most reliable on 3.11).
+The checked-in dashboard data lets you explore the interface without rerunning the models. Install Node.js and npm, then:
 
 ```bash
-git clone https://github.com/CocoChengtw/flu-forecast.git
-cd flu-forecast
+git clone https://github.com/jyjeong027/flu-forecast.git
+cd flu-forecast/app
+npm install
+npm run dev
+```
+
+See [dashboard documentation](app/README.md) for the optional AI assistant, data export, and deployment setup. Live assistant answers require an API key; keep credentials outside version control.
+
+### Analysis
+
+From the repository root, use Python 3.11:
+
+```bash
 python3.11 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-nbstripout --install
-cp .env.example .env
+python -m src.audit_threshold
+python -m src.eda
+python -m src.explore_high_activity_threshold
+python -m src.explore_wastewater_lead
 ```
 
-On Windows, activate the environment with `.venv\Scripts\activate` instead.
+On Windows, activate with `.venv\Scripts\activate`.
 
-Only the AI assistant and the optional LLM comparison need an API key in `.env`. Everyone else can leave it empty.
+## Repository guide
 
-## Daily workflow
+| Location | Contents |
+| --- | --- |
+| [app/](app/) | React + TypeScript dashboard and assistant integration |
+| [src/](src/) | Data preparation, forecasting, evaluation, and exploration |
+| [notebooks/](notebooks/) | Exploratory analysis |
+| [data/processed/](data/processed/) | Weekly surveillance and comparison datasets |
+| [results/](results/) | Forecasts, metrics, figures, and analysis outputs |
+| [notes/](notes/) | Methods, decisions, and limitations |
+| [tests/](tests/) | Focused checks for analysis and model behavior |
 
-```bash
-git checkout main
-git pull
-git checkout -b <your-name>/<task>
-```
+**Stack:** Python, pandas, NumPy, statsmodels, Prophet, Chronos, React, TypeScript, Vite, and Netlify.
 
-Work, then:
+## Attribution and license
 
-```bash
-git add .
-git commit -m "Short description of the change"
-git push -u origin <your-name>/<task>
-```
+Based on the [original team repository](https://github.com/CocoChengtw/flu-forecast). Source data include CDC FluView/ILINet and clinical laboratory surveillance via Delphi, and CDC NWSS influenza-A wastewater measurements. See the analysis notes for dataset-specific processing and limitations.
 
-Then open a Pull Request on GitHub to merge into `main`.
-
-## Team rules
-
-- Name notebooks with your name or role: `notebooks/01_eda_<name>.ipynb`
-- Move reusable functions into `src/` so we don't each write our own version
-- Take dates, thresholds and settings from `src/config.py`
-- Every model uses the shared forecast format and the same origins, horizons and test period, so the comparison is fair
-- Never commit `.env` or API keys
-- Keep `main` runnable
-- Record key decisions and their reasons in `notes/analysis_log.md`
-- If you're blocked for more than half a day, post in the group chat right away
-
-## Roles
-
-| Role | Responsibility |
-|---|---|
-| A | Data, EDA, threshold calculation, wastewater (stretch) |
-| B | Evaluation framework, preprocessing, classical models |
-| C | Chronos, probability outputs, optional LLM comparison |
-| D | Dashboard, AI assistant, deployment |
-| E | Slides, storytelling, written deliverables (incl. product description and AI-tools statement) |
-
-## Timeline
-
-| Date | Milestone |
-|---|---|
-| Sun 10/18 | Data fetched; EDA starts; evaluation framework and naive baseline done |
-| Mon 10/19 | Models run in parallel (both folds); dashboard skeleton; thresholds finalized |
-| Tue 10/20 noon | All model results ready |
-| Tue 10/20 afternoon | Probability outputs; dashboard integrated and deployed; slides built |
-| **Tue 10/20 night** | **Results frozen: no number changes after this** |
-| Wed 10/21 | Final slides shared at noon; full rehearsal at night |
-| **Thu 10/22 AM** | **Presentation** |
+Code is distributed under the existing [Apache 2.0 license](LICENSE). Source datasets remain subject to their providers’ terms.
